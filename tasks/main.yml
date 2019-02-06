@@ -18,7 +18,7 @@
 
   - name: Override virtualbox_version if defaults set to auto
     set_fact: virtualbox_version="{{ host_vbox_version.stdout }}"
-  when: virtualbox_version == "auto"
+    when: virtualbox_version == "auto"
 
 - name: Determine if (the requested version of) vboxguestadditions is installed
   shell: modinfo vboxguest 2>/dev/null|awk '/^version/{print $2}'
@@ -37,19 +37,21 @@
     stat: path=/dev/sr0
     register: CD_path
     ignore_errors: yes
-    when: not file_path.stat.exists
+    when: virtualbox_dont_search_iso and not file_path.stat.exists 
 
   - name: Check if CD or ISO file is present on the host
     debug: msg="Could not find necessary CD or ISO file on the host. Attempting to download..."
-    when: not file_path.stat.exists and not CD_path.stat.exists
+    when: virtualbox_dont_search_iso and not file_path.stat.exists and not CD_path.stat.exists
 
   - name: Download ISO file when the requested version is not present on the host
-    get_url: url=http://download.virtualbox.org/virtualbox/{{ virtualbox_version }}/VBoxGuestAdditions_{{ virtualbox_version }}.iso dest=/root/VBoxGuestAdditions.iso
+    ## get_url: url=http://download.virtualbox.org/virtualbox/{{ virtualbox_version }}/VBoxGuestAdditions_{{ virtualbox_version }}.iso dest=/root/VBoxGuestAdditions.iso
+    get_url: url=http://download.virtualbox.org/virtualbox/{{ virtualbox_version }}/VBoxGuestAdditions_{{ virtualbox_version }}.iso dest="{{ virtualbox_iso }}"
     ignore_errors: yes
     when: not file_path.stat.exists and not CD_path.stat.exists
 
   - name: Re-check if the ISO file is present on the host
-    stat: path=/root/VBoxGuestAdditions.iso
+    ## stat: path=/root/VBoxGuestAdditions.iso
+    stat: path="{{ virtualbox_iso }}"
     register: file_path
     ignore_errors: yes
 
@@ -75,6 +77,7 @@
       opts=noauto
       state=mounted
     register: mounted_ISO
+    become: true
     when: mount_path is defined and mount_path.stdout == ""
 
   - name: Check if VBoxGuest additions ISO is mounted
@@ -108,6 +111,7 @@
       rpm_key:
         key: /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}
         state: present
+    become: yes
     when: ansible_os_family == 'RedHat' 
 
   - name: Install necessary packages for compiling
@@ -121,6 +125,7 @@
       - dkms
       - gcc
       - make
+    become: yes
 
   - name: Install kernel headers for Debians
     apt:
@@ -130,6 +135,7 @@
       install-recommends=no
       state=present
     when: kernel is defined and kernel.stdout is defined and ansible_os_family == 'Debian'
+    become: yes
 
   - name: Install latest kernel and headers for CentOSes
     yum:
@@ -137,6 +143,7 @@
       state: latest # needed latest for dmks to find matching header 
       update_cache: yes
     when: kernel is defined and ansible_os_family == 'RedHat' and kernel.stdout is defined 
+    become: yes
 
   - name: Check which packages were installed for Debians
     shell: dpkg-query -l > /tmp/after.txt
@@ -198,6 +205,7 @@
       - /var/log/vboxadd-setup.log
       - /var/log/VBoxGuestAdditions.log
       - /var/log/VBoxGuestAdditions-uninstall.log
+    become: yes
 
   - name: Remove cdrom fstab entry
     lineinfile: >
