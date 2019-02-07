@@ -1,0 +1,9 @@
+---
+- hosts: dev-tools config vagrant
+  vars:
+    virtualbox_iso: /tmp/VBoxGuestAdditions.iso
+    virtualbox_version: auto
+    virtualbox_dont_search_iso: true
+
+  roles:
+     - ansible-role-virtualbox-guest
